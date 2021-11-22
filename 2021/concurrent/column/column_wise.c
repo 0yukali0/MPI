@@ -3,7 +3,7 @@
 #include "mpi.h"
 
 #define ROOT 0
-#define PROBLEM_SIZE 30
+#define PROBLEM_SIZE 10000
 #define DEFAULT_VALUE 1.1
 
 // Role function
@@ -64,9 +64,12 @@ int main(int argc, char** argv) {
   
   // work stage: init -> work -> report
   role.init();
+  //printf("%d init\n", pid);
   role.work();
+  //printf("%d work\n", pid);
   endTime = MPI_Wtime();
   role.get(startTime, endTime);
+  //printf("%d end\n", pid);
   MPI_Finalize();
   return 0;
 }
@@ -82,8 +85,9 @@ void MasterInit() {
   SetDefaultB();
   MPI_Bcast(BVector, j, MPI_FLOAT, ROOT, MPI_COMM_WORLD);
   SetDefaultA();
-  revBuf = (float*)malloc(j * sizeof(float));
+  revBuf = (float*)malloc(jobSize[pid] * sizeof(float));
   MPI_Scatterv(AMatrix, jobSize, dispOrder, MPI_FLOAT, revBuf, jobSize[pid], MPI_FLOAT, ROOT, MPI_COMM_WORLD);
+  free(AMatrix);
 
   SetJobRange(i);
   return;
@@ -97,10 +101,10 @@ void Work(){
     sendBuf[indexJ] = 0;
     indexJ++;
   }
-
+  
   indexJ = 0;
   while(indexJ < j) {
-    int index =  indexJ * i;
+    int index =  0;
     indexI = 0;
     while(indexI < i) {
       sendBuf[indexI] += BVector[indexJ] *  revBuf[index];
@@ -109,18 +113,25 @@ void Work(){
     }
     indexJ++;
   }
+  indexJ = 0;
   return;
 }
 void MasterReport(double start, double end) {
   CVector = (float*)malloc(j * sizeof(float));
   MPI_Reduce(sendBuf, CVector, j, MPI_FLOAT, MPI_SUM, ROOT, MPI_COMM_WORLD);
+  free(jobSize);
+  free(dispOrder);
+  free(BVector);
+  free(revBuf);
+  free(sendBuf);
   int indexI = 0;
   float result = CVector[0];
-  printf("Result %.f\n", result);
+  printf("Result %.2f\n", result);
   while(indexI < j) {
-    if (result != CVector[indexI]) printf("Dif %.2f\n", CVector[indexI])
+    if (result != CVector[indexI]) printf("Dif %.2f\n", CVector[indexI]);
     indexI++;
   }
+  printf("\ntime:%.2lf\n", end-start);
   return;
 }
 
@@ -134,7 +145,6 @@ void SlaveInit() {
   BVector = (float*)malloc(j * sizeof(float));
   revBuf = (float*)malloc(jobSize[pid] * sizeof(float));
   MPI_Bcast(BVector, j, MPI_FLOAT, ROOT, MPI_COMM_WORLD);
-  revBuf = (float*)malloc(j * sizeof(float));
   MPI_Scatterv(NULL, jobSize, dispOrder, MPI_FLOAT, revBuf, jobSize[pid], MPI_FLOAT, ROOT, MPI_COMM_WORLD);
 
   SetJobRange(i);
@@ -142,6 +152,11 @@ void SlaveInit() {
 }
 void SlaveReport(double start, double end) {
   MPI_Reduce(sendBuf, NULL, j, MPI_FLOAT, MPI_SUM, ROOT, MPI_COMM_WORLD);
+  free(jobSize);
+  free(dispOrder);
+  free(BVector);
+  free(revBuf);
+  free(sendBuf);
   return;
 }
 
@@ -157,7 +172,6 @@ void SetJobOrder() {
   dispOrder = (int*)malloc(group * sizeof(int));
   jobSize[0] = masterJobSize;
   dispOrder[0] = 0;
-  revBuf = (float*)malloc(masterJobSize * sizeof(float));
   int indexI = 1;
   while(indexI < group) {
     dispOrder[indexI] = dispOrder[indexI - 1] + jobSize[indexI - 1];
@@ -168,32 +182,13 @@ void SetJobOrder() {
 }
 
 void SetDefaultA() {
-  float* rows = NULL;
   int size = i * j;
-  row = (float*)malloc(size * sizeof(float));
   AMatrix = (float*)malloc(size * sizeof(float));
-  int indexI = 0;
   int indexJ = 0;
-  while(indexI < i) {
-    indexJ = 0;
-    int index = indexJ * j;
-    while(indexJ < j) {
-      index += indexJ;
-      row[index] = DEFAULT_VALUE;
-      indexJ++;
-    }
-    indexI++;
-  }
 
-  while(indexI < i) {
-    indexJ = 0;
-    int index = indexJ * j;
-    while(indexJ < j) {
-      index += indexJ;
-      AMatrix[indexJ * i + indexI] = row[index];
-      indexJ++;
-    }
-    indexI++;
+  while(indexJ < size) {
+    AMatrix[indexJ] = DEFAULT_VALUE;
+    indexJ++;
   }
   return;
 }

@@ -90,8 +90,8 @@ void MasterInit() {
     indexI++;
   };
 
-  GetDisp();
-  GetJobSize();
+  // GetDisp();
+  // GetJobSize();
 
   int size = i * j;
   AMatrix = (float*)malloc(size * sizeof(float));
@@ -113,6 +113,7 @@ void MasterInit() {
   MPI_Bcast(dispOrder, group, MPI_INT, ROOT, MPI_COMM_WORLD);
   MPI_Bcast(BVector, j, MPI_FLOAT, ROOT, MPI_COMM_WORLD);
   MPI_Scatterv(AMatrix, jobSize, dispOrder, MPI_FLOAT, revBuf, jobSize[pid], MPI_FLOAT, ROOT, MPI_COMM_WORLD);
+  free(AMatrix);
 
   SetJobRange();
   return;
@@ -135,6 +136,7 @@ void Work(){
     // printf("pid %d of %d, sum:%.2f v.s buf:%.2f\n", pid, IIndex, sum, sendBuf[IIndex]);
     IIndex++;
   }
+  free(revBuf);
   return;
 }
 void MasterReport(double start, double end){
@@ -153,7 +155,10 @@ void MasterReport(double start, double end){
   // GetDisp();;
   MPI_Gatherv(sendBuf, role.context.size, MPI_FLOAT, CVector, jobSize, dispOrder, MPI_FLOAT, ROOT, MPI_COMM_WORLD);
   // printf("master checking...\n");
-  
+  free(BVector);
+  free(jobSize);
+  free(dispOrder);
+  free(sendBuf);
   printf("time %lf\n", end - start);
   IIndex = 0;
   float isSame = CVector[0];
@@ -183,6 +188,10 @@ void SlaveInit() {
 void SlaveReport(double start, double end) {
   // printf("Slave return result\n");
   MPI_Gatherv(sendBuf, role.context.size, MPI_FLOAT, NULL, NULL, NULL, MPI_FLOAT, ROOT, MPI_COMM_WORLD);
+  free(sendBuf);
+  free(jobSize);
+  free(dispOrder);
+  free(BVector);
   // printf("slave end\n");
   return;
 }
