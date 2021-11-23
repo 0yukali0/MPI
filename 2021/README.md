@@ -1,7 +1,7 @@
 # computation time
-matrix A 10k * 10k
-vector B 10k
-result C 10k
+1. matrix A 10k * 10k
+2. vector B 10k
+3. result C 10k
 ```
 core   |     1    |     10    |      10      |     10    |
 ----------------------------------------------------------
