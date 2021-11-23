@@ -8,9 +8,9 @@
 
 // Role function
 void MasterInit();
-void MasterReport(double start, double end);
+void MasterReport();
 void SlaveInit();
-void SlaveReport(double start, double end);
+void SlaveReport();
 void Work();
 
 // Setting or search
@@ -32,7 +32,7 @@ typedef struct command {
   job  context;
   void (*init)();
   void (*work)();
-  void (*get)(double, double);
+  void (*get)();
 }command;
 
 command role;
@@ -46,13 +46,15 @@ float* CVector = NULL;
 float* revBuf = NULL;
 float* sendBuf = NULL;
 
+// time
+double startTime, endTime;
+double seqStartTime, seqEndTime;
+
 int main(int argc, char** argv) {
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &pid);
   MPI_Comm_size(MPI_COMM_WORLD, &group);
-  double startTime, endTime;
-  startTime = MPI_Wtime();
-
+  seqStartTime = MPI_Wtime();
   // defualt role is slave
   role.init = SlaveInit;
   role.work = Work;
@@ -64,12 +66,8 @@ int main(int argc, char** argv) {
   
   // work stage: init -> work -> report
   role.init();
-  //printf("%d init\n", pid);
   role.work();
-  //printf("%d work\n", pid);
-  endTime = MPI_Wtime();
-  role.get(startTime, endTime);
-  //printf("%d end\n", pid);
+  role.get();
   MPI_Finalize();
   return 0;
 }
@@ -77,15 +75,19 @@ int main(int argc, char** argv) {
 void MasterInit() {
   // define process job size
   i = j = PROBLEM_SIZE;
+  SetDefaultB();
+  SetDefaultA();
+  seqEndTime = MPI_Wtime();
+  startTime = MPI_Wtime();
+  SetJobOrder();
   MPI_Bcast(&i, 1, MPI_UNSIGNED, ROOT, MPI_COMM_WORLD);
   MPI_Bcast(&j, 1, MPI_UNSIGNED, ROOT, MPI_COMM_WORLD);
-  SetJobOrder();
   MPI_Bcast(jobSize, group, MPI_INT, ROOT, MPI_COMM_WORLD);
   MPI_Bcast(dispOrder, group, MPI_INT, ROOT, MPI_COMM_WORLD);
-  SetDefaultB();
   MPI_Bcast(BVector, j, MPI_FLOAT, ROOT, MPI_COMM_WORLD);
-  SetDefaultA();
   revBuf = (float*)malloc(jobSize[pid] * sizeof(float));
+  // GetDisp();
+  // GetJobSize();
   MPI_Scatterv(AMatrix, jobSize, dispOrder, MPI_FLOAT, revBuf, jobSize[pid], MPI_FLOAT, ROOT, MPI_COMM_WORLD);
   free(AMatrix);
 
@@ -103,22 +105,27 @@ void Work(){
   }
   
   indexJ = 0;
-  while(indexJ < j) {
-    int index =  0;
+  int jobSize = role.context.size;
+  while(indexJ < jobSize) {
     indexI = 0;
+    float b = BVector[indexJ];
+    float* rptr = revBuf;
+    float* sptr = sendBuf;
     while(indexI < i) {
-      sendBuf[indexI] += BVector[indexJ] *  revBuf[index];
+      *(sptr) += b * (*rptr);
       indexI++;
-      index++;
+      rptr++;
+      sptr++;
     }
     indexJ++;
   }
-  indexJ = 0;
+  // printf("c %.2lf\n", sendBuf[0]);
   return;
 }
-void MasterReport(double start, double end) {
+void MasterReport() {
   CVector = (float*)malloc(j * sizeof(float));
   MPI_Reduce(sendBuf, CVector, j, MPI_FLOAT, MPI_SUM, ROOT, MPI_COMM_WORLD);
+  endTime = MPI_Wtime();
   free(jobSize);
   free(dispOrder);
   free(BVector);
@@ -126,18 +133,20 @@ void MasterReport(double start, double end) {
   free(sendBuf);
   int indexI = 0;
   float result = CVector[0];
-  printf("Result %.2f\n", result);
+  printf("seq time:%.2lf\n", seqEndTime - seqStartTime);
+  printf("time:%lf\n", endTime - startTime);
+  printf("Result %lf\n", result);
   while(indexI < j) {
     if (result != CVector[indexI]) printf("Dif %.2f\n", CVector[indexI]);
     indexI++;
   }
-  printf("\ntime:%.2lf\n", end-start);
   return;
 }
 
 void SlaveInit() {
   jobSize = (int*)malloc(group * sizeof(int));
   dispOrder = (int*)malloc(group * sizeof(int));
+  startTime = MPI_Wtime();
   MPI_Bcast(&i, 1, MPI_UNSIGNED, ROOT, MPI_COMM_WORLD);
   MPI_Bcast(&j, 1, MPI_UNSIGNED, ROOT, MPI_COMM_WORLD);
   MPI_Bcast(jobSize, group, MPI_INT, ROOT, MPI_COMM_WORLD);
@@ -150,8 +159,9 @@ void SlaveInit() {
   SetJobRange(i);
   return;
 }
-void SlaveReport(double start, double end) {
+void SlaveReport() {
   MPI_Reduce(sendBuf, NULL, j, MPI_FLOAT, MPI_SUM, ROOT, MPI_COMM_WORLD);
+  endTime = MPI_Wtime();
   free(jobSize);
   free(dispOrder);
   free(BVector);
