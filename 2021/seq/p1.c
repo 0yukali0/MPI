@@ -12,8 +12,6 @@ float* c = NULL;
 int main(int argc, char** argv) {
   MPI_Init(&argc, &argv);
   double start, end;
-  start = MPI_Wtime();
-
   a = (float*)malloc(SIZE * SIZE * sizeof(float));
   b = (float*)malloc(SIZE * sizeof(float));
   c = (float*)malloc(SIZE * sizeof(float));
@@ -32,18 +30,24 @@ int main(int argc, char** argv) {
     }
     i++;
   }
-
-  aIndex = i = 0;
+  start = MPI_Wtime();
+  i = 0;
+  float* ptr = a;
+  float* bptr;
+  float* cptr = c;
   while(i < SIZE){
     j = 0;
+    bptr = b;
     float sum = 0;
     while(j < SIZE) {
-      sum += a[aIndex] * b[j];
+      sum += (*ptr)  * (*bptr);
       j++;
-      aIndex++;
+      ptr++;
+      bptr++;
     }
-    c[i] = sum;
+    *cptr = sum;
     i++;
+    cptr++;
   }
 
   end = MPI_Wtime();
