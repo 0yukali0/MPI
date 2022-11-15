@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdbool.h>
-//#include "mpi.h"
+#include "mpi.h"
 #define SIZE 1001
 #define ROOT 0
 #define BLOCK_LOW(id,p,n) ((id)*(n)/(p))
